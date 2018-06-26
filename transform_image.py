@@ -1,4 +1,5 @@
 import argparse
+import os
 
 import joblib
 import numpy as np
@@ -60,6 +61,10 @@ def main():
     parser.add_argument('hdrfile')
     args = parser.parse_args()
     hdrfile = args.hdrfile
+    out_filename = hdrfile[:-4] + '_parameter.hdr'
+    if os.path.exists(out_filename):
+        print(f'{out_filename} already exists. Quitting...')
+        return
     img = envi.open(hdrfile).load()
     lines, samples, bands = img.shape
     print(f'{lines} lines, {samples} samples, {bands} bands')
@@ -71,8 +76,9 @@ def main():
     out = transform_image(img, wavelengths, ties, glass, ignore_value)
     md = metadata(img.metadata, hdrfile)
     interleave = img.metadata['interleave']
-    envi.save_image('out.hdr', out,
-                    metadata=md, interleave=interleave, force=True)
+    out_filename = hdrfile[:-4] + '_parameter.hdr'
+    envi.save_image(out_filename, out,
+                    metadata=md, interleave=interleave)
 
 
 if __name__ == '__main__':
