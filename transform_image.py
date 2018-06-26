@@ -48,8 +48,8 @@ def transform_image(img, wavelengths, ties, glass, ignore_value):
                               signature='(n)->(k)')
     out = joblib.Parallel(n_jobs=-1, verbose=10)(
         joblib.delayed(transformv)(
-            sample, wavelengths=wavelengths, ties=ties, glass=glass)
-        for sample in img)
+            img[i], wavelengths=wavelengths, ties=ties, glass=glass)
+        for i in range(img.shape[0]))
     out = np.squeeze(np.array(out))
     out[np.isnan(out)] = ignore_value
     return out
@@ -61,7 +61,8 @@ def main():
     args = parser.parse_args()
     hdrfile = args.hdrfile
     img = envi.open(hdrfile).load()
-    samples, lines, bands = img.shape
+    lines, samples, bands = img.shape
+    print(f'{lines} lines, {samples} samples, {bands} bands')
     dt = img.dtype
     ties = [750, 1489, 2896]
     glass = [1150, 1170, 1190]
