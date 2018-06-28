@@ -9,12 +9,21 @@ import spectral.io.envi as envi
 import transformations
 
 
+DATA_IGNORE_VALUE_DEFAULT = -999.0
+DATA_IGNORE_VALUE_NAME = 'data ignore value'
+
+
 def metadata(old_md, hdrfile):
     md = dict()
     md['description'] = 'Spectral parameters computed from ' + hdrfile
-    md['map info'] = old_md['map info']
-    md['coordinate system string'] = old_md['coordinate system string']
-    md['y start'] = old_md['y start']
+    copy_keys = [
+        'coordinate system string',
+        'map info',
+        'y start',
+    ]
+    for key in copy_keys:
+        if key in old_md:
+            md[key] = old_md[key]
     md['band names'] = [
         'reflectance at 750nm',
         'reflectance at 1489nm',
@@ -32,7 +41,10 @@ def metadata(old_md, hdrfile):
         'interband distance',
         'glass band depth',
     ]
-    md['data ignore value'] = old_md['data ignore value']
+    if DATA_IGNORE_VALUE_NAME in old_md:
+        md[DATA_IGNORE_VALUE_NAME] = old_md[DATA_IGNORE_VALUE_NAME]
+    else:
+        md[DATA_IGNORE_VALUE_NAME] = DATA_IGNORE_VALUE_DEFAULT
     return md
 
 
@@ -43,7 +55,12 @@ def nearest_wavelength(x, wavelengths):
 def transform_image(img, wavelengths, ties, glass, ignore_value):
     ties = [nearest_wavelength(x, wavelengths) for x in ties]
     glass = [nearest_wavelength(x, wavelengths) for x in glass]
-    img[img == ignore_value] = np.nan
+    if ignore_value is None:
+        # treat negative reflectances as ignored
+        print('ignoring negative values.')
+        img[img <= 0] = np.nan
+    else:
+        img[img == ignore_value] = np.nan
     transformv = np.vectorize(transformations.transform_pixel,
                               excluded={'wavelengths', 'ties', 'glass'},
                               signature='(n)->(k)')
@@ -52,7 +69,14 @@ def transform_image(img, wavelengths, ties, glass, ignore_value):
             img[i], wavelengths=wavelengths, ties=ties, glass=glass)
         for i in range(img.shape[0]))
     out = np.squeeze(np.array(out))
-    out[np.isnan(out)] = ignore_value
+    if ignore_value is None:
+        print(
+            f'writing output with {DATA_IGNORE_VALUE_DEFAULT} as {DATA_IGNORE_VALUE_NAME}')
+        out[np.isnan(out)] = DATA_IGNORE_VALUE_DEFAULT
+    else:
+        print(
+            f'writing output with {ignore_value} as {DATA_IGNORE_VALUE_NAME}')
+        out[np.isnan(out)] = ignore_value
     return out
 
 
@@ -72,10 +96,15 @@ def main():
     ties = [750, 1489, 2896]
     glass = [1150, 1170, 1190]
     wavelengths = np.array(img.metadata['wavelength'], dtype=dt)
-    ignore_value = dt.type(img.metadata['data ignore value'])
-    out = transform_image(img, wavelengths, ties, glass, ignore_value)
+    if DATA_IGNORE_VALUE_NAME in img.metadata:
+        ignore_value = dt.type(img.metadata[DATA_IGNORE_VALUE_NAME])
+        print(f'{DATA_IGNORE_VALUE_NAME} = {ignore_value}')
+    else:
+        ignore_value = None
+        print(f'{DATA_IGNORE_VALUE_NAME} not set.')
     md = metadata(img.metadata, hdrfile)
     interleave = img.metadata['interleave']
+    out = transform_image(img, wavelengths, ties, glass, ignore_value)
     out_filename = hdrfile[:-4] + '_parameter.hdr'
     envi.save_image(out_filename, out,
                     metadata=md, interleave=interleave)
