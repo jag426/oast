@@ -35,7 +35,7 @@ def center(band):
 
 
 def integrated_depth(band):
-    return np.trapz(band, band.index)
+    return np.trapz(1 - band, band.index)
 
 
 def asymmetry(band, ctr_x):
@@ -48,7 +48,6 @@ def asymmetry(band, ctr_x):
         pd.Series([ctr_y], index=[ctr_x]),
         band[ctr_right:]
     ])
-    band = 1 - band
     left = band[:ctr_x]
     asym = integrated_depth(left) / integrated_depth(band)
 
