@@ -105,7 +105,6 @@ def main():
     md = metadata(img.metadata, hdrfile)
     interleave = img.metadata['interleave']
     out = transform_image(img, wavelengths, ties, glass, ignore_value)
-    out_filename = hdrfile[:-4] + '_parameter.hdr'
     envi.save_image(out_filename, out,
                     metadata=md, interleave=interleave)
 

@@ -13,9 +13,17 @@ def continuum(data, ties):
     return cont
 
 
+def smooth(band):
+    return band.rolling(window=3, center=True).mean()
+
+
+def polynomial_approximation(band, deg=4):
+    return np.poly1d(np.polyfit(band.index, band, deg))
+
+
 def center(band):
     left, right = band.index[0], band.index[-1]
-    poly = np.poly1d(np.polyfit(band.index, band, 4))
+    poly = polynomial_approximation(band)
 
     crit_x = poly.deriv().roots
     crit_x = np.real_if_close(crit_x[np.isreal(crit_x)])
@@ -109,7 +117,7 @@ def transform_pixel(pin, wavelengths, ties, glass):
         pout[8:13] = [minimum, x, depth, ibd, asym]
 
     # interband distance
-    pout[13] = pout[8] - pout[4]
+    pout[13] = pout[9] - pout[4]
 
     # glass band depth
     pout[14] = 1 - removed[glass].mean()
