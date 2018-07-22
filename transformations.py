@@ -62,8 +62,8 @@ def asymmetry(band, ctr_x):
     return asym
 
 
-def transform_pixel(pin, wavelengths, ties, glass):
-    """There are 15 output parameters for each pixel.
+def transform_pixel(pin, wavelengths, ties, glass, depth_wavelengths):
+    """There are 20 output parameters for each pixel.
     1-3. reflectance at 3 tie points.
     4. 1um band minimum. The wavelength with the minimum (continuum-removed) 
        reflectance.
@@ -80,10 +80,11 @@ def transform_pixel(pin, wavelengths, ties, glass):
     9-13. Same as 4-8, but for the 2um band.
     14. Interband distance. (2um band center) - (1um band center).
     15. Glass band depth.
+    16-20. Band depth at the 5 specified wavelengths.
     """
 
     data = pd.Series(data=pin, index=wavelengths)
-    pout = np.full(15, np.nan, dtype=pin.dtype)
+    pout = np.full(20, np.nan, dtype=pin.dtype)
 
     # reflectance values at the 3 tie points
     pout[:3] = data[ties]
@@ -121,5 +122,8 @@ def transform_pixel(pin, wavelengths, ties, glass):
 
     # glass band depth
     pout[14] = 1 - removed[glass].mean()
+
+    # other band depths
+    pout[15:20] = 1 - removed[depth_wavelengths]
 
     return pout

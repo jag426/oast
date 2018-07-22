@@ -40,6 +40,11 @@ def metadata(old_md, hdrfile):
         '2um band asymmetry',
         'interband distance',
         'glass band depth',
+        'band depth at 950nm',
+        'band depth at 1050nm',
+        'band depth at 1249nm',
+        'band depth at 1898nm',
+        'band depth at 2417nm',
     ]
     if DATA_IGNORE_VALUE_NAME in old_md:
         md[DATA_IGNORE_VALUE_NAME] = old_md[DATA_IGNORE_VALUE_NAME]
@@ -52,9 +57,12 @@ def nearest_wavelength(x, wavelengths):
     return wavelengths[np.abs(wavelengths - x).argmin()]
 
 
-def transform_image(img, wavelengths, ties, glass, ignore_value):
+def transform_image(img, wavelengths, ties, glass, depth_wavelengths,
+                    ignore_value):
     ties = [nearest_wavelength(x, wavelengths) for x in ties]
     glass = [nearest_wavelength(x, wavelengths) for x in glass]
+    depth_wavelengths = [nearest_wavelength(
+        x, wavelengths) for x in depth_wavelengths]
     if ignore_value is None:
         # treat negative reflectances as ignored
         print('ignoring negative values.')
@@ -62,11 +70,13 @@ def transform_image(img, wavelengths, ties, glass, ignore_value):
     else:
         img[img == ignore_value] = np.nan
     transformv = np.vectorize(transformations.transform_pixel,
-                              excluded={'wavelengths', 'ties', 'glass'},
+                              excluded={'wavelengths', 'ties', 'glass',
+                                        'depth_wavelengths'},
                               signature='(n)->(k)')
     out = joblib.Parallel(n_jobs=-1, verbose=10)(
         joblib.delayed(transformv)(
-            img[i], wavelengths=wavelengths, ties=ties, glass=glass)
+            img[i], wavelengths=wavelengths, ties=ties, glass=glass,
+            depth_wavelengths=depth_wavelengths)
         for i in range(img.shape[0]))
     out = np.squeeze(np.array(out))
     if ignore_value is None:
@@ -95,6 +105,7 @@ def main():
     dt = img.dtype
     ties = [750, 1489, 2896]
     glass = [1150, 1170, 1190]
+    depth_wavelengths = [950, 1050, 1249, 1898, 2417]
     wavelengths = np.array(img.metadata['wavelength'], dtype=dt)
     if DATA_IGNORE_VALUE_NAME in img.metadata:
         ignore_value = dt.type(img.metadata[DATA_IGNORE_VALUE_NAME])
@@ -104,7 +115,12 @@ def main():
         print(f'{DATA_IGNORE_VALUE_NAME} not set.')
     md = metadata(img.metadata, hdrfile)
     interleave = img.metadata['interleave']
-    out = transform_image(img, wavelengths, ties, glass, ignore_value)
+    out = transform_image(img,
+                          wavelengths=wavelengths,
+                          ties=ties,
+                          glass=glass,
+                          depth_wavelengths=depth_wavelengths,
+                          ignore_value=ignore_value)
     envi.save_image(out_filename, out,
                     metadata=md, interleave=interleave)
 
