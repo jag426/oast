@@ -58,7 +58,8 @@ def main():
     continuum_removed = pd.DataFrame(index=data.index)
     for i, (colname, spectrum) in enumerate(list(data.items())[1:]):
         if plot:
-            plt.subplot(5, 4, i + 1).set_title(colname)
+            plt.figure(colname)
+            plt.title(colname)
         if smooth:
             spectrum = transformations.smooth(spectrum)
 
