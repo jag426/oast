@@ -17,13 +17,19 @@ def main():
     glass = [1150, 1170, 1190]
     deg = 4
     smooth = True
-    plot = True
-    printout = True
 
     parser = argparse.ArgumentParser(description='Analyze a single spectrum')
+    parser.add_argument('--printout', action='store_true')
+    parser.add_argument('--noplot', action='store_true')
+    parser.add_argument('--polynomials', action='store_true')
     parser.add_argument('csvfile')
     args = parser.parse_args()
+
     csvfile = args.csvfile
+    plot = not args.noplot
+    polynomials = args.polynomials
+    printout = args.printout
+
     band_info_file = csvfile[:-4] + '_parameter.csv'
     continuum_removed_file = csvfile[:-4] + '_continuum-removed.csv'
     if os.path.exists(band_info_file):
@@ -126,7 +132,7 @@ def main():
             'interband distance': interband_distance,
             'glass band depth': glass_depth,
         }, ignore_index=True)
-        if plot:
+        if plot and polynomials:
             poly_1 = transformations.polynomial_approximation(band_1, deg)
             plt.plot(band_1.index, np.vectorize(poly_1)(band_1.index))
             plt.plot([x_1], [y_1], marker='x', color='grey')
