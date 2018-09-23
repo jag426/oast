@@ -9,11 +9,28 @@ import spectral.io.envi as envi
 import transformations
 
 
+# Used for initial continuum when computing dynamic tie points
+INITIAL_TIE_POINTS = [700, 1489, 2616]
+
+# Ranges within which to look for the dynamic tie points
+TIE_POINT_RANGES = [(600, 1000), (1000, 1700), (2000, 2600)]
+
+# Static tie points
+DEFAULT_TIE_POINTS = [750, 1489, 2896]
+
+# Range around the band minimum to use for a polynomial fit to compute the
+# band center. This is the one-sided range, so the polynomial will be fit from
+# (minimum - range) to (minimum + range).
+BAND_CENTER_RANGE = 200
+
+GLASS_BAND_POINTS = [1150, 1170, 1190]
+BAND_DEPTH_POINTS = [950, 1050, 1249, 1898, 2417]
+
 DATA_IGNORE_VALUE_DEFAULT = -999.0
 DATA_IGNORE_VALUE_NAME = 'data ignore value'
 
 
-def metadata(old_md, hdrfile):
+def metadata(old_md, hdrfile, depth_wavelengths):
     md = dict()
     md['description'] = 'Spectral parameters computed from ' + hdrfile
     copy_keys = [
@@ -24,28 +41,7 @@ def metadata(old_md, hdrfile):
     for key in copy_keys:
         if key in old_md:
             md[key] = old_md[key]
-    md['band names'] = [
-        'reflectance at 750nm',
-        'reflectance at 1489nm',
-        'reflectance at 2896nm',
-        '1um band minimum',
-        '1um band center',
-        '1um band depth',
-        '1um integrated band depth',
-        '1um band asymmetry',
-        '2um band minimum',
-        '2um band center',
-        '2um band depth',
-        '2um band integrated band depth',
-        '2um band asymmetry',
-        'interband distance',
-        'glass band depth',
-        'band depth at 950nm',
-        'band depth at 1050nm',
-        'band depth at 1249nm',
-        'band depth at 1898nm',
-        'band depth at 2417nm',
-    ]
+    md['band names'] = transformations.output_band_names(depth_wavelengths)
     if DATA_IGNORE_VALUE_NAME in old_md:
         md[DATA_IGNORE_VALUE_NAME] = old_md[DATA_IGNORE_VALUE_NAME]
     else:
@@ -58,7 +54,7 @@ def nearest_wavelength(x, wavelengths):
 
 
 def transform_image(img, wavelengths, ties, glass, depth_wavelengths,
-                    ignore_value):
+                    dynamic_tie_ranges, center_range, ignore_value):
     ties = [nearest_wavelength(x, wavelengths) for x in ties]
     glass = [nearest_wavelength(x, wavelengths) for x in glass]
     depth_wavelengths = [nearest_wavelength(
@@ -70,13 +66,21 @@ def transform_image(img, wavelengths, ties, glass, depth_wavelengths,
     else:
         img[img == ignore_value] = np.nan
     transformv = np.vectorize(transformations.transform_pixel,
-                              excluded={'wavelengths', 'ties', 'glass',
-                                        'depth_wavelengths'},
+                              excluded={'wavelengths',
+                                        'ties',
+                                        'glass',
+                                        'depth_wavelengths',
+                                        'dynamic_tie_ranges',
+                                        'center_range'},
                               signature='(n)->(k)')
     out = joblib.Parallel(n_jobs=-1, verbose=10)(
-        joblib.delayed(transformv)(
-            img[i], wavelengths=wavelengths, ties=ties, glass=glass,
-            depth_wavelengths=depth_wavelengths)
+        joblib.delayed(transformv)(img[i],
+                                   wavelengths=wavelengths,
+                                   ties=ties,
+                                   glass=glass,
+                                   depth_wavelengths=depth_wavelengths,
+                                   dynamic_tie_ranges=dynamic_tie_ranges,
+                                   center_range=center_range)
         for i in range(img.shape[0]))
     out = np.squeeze(np.array(out))
     if ignore_value is None:
@@ -93,6 +97,7 @@ def transform_image(img, wavelengths, ties, glass, depth_wavelengths,
 def main():
     parser = argparse.ArgumentParser(description='Transform an ENVI image')
     parser.add_argument('hdrfile')
+    parser.add_argument('--dynamic_tie_points', '-d', action='store_true')
     args = parser.parse_args()
     hdrfile = args.hdrfile
     out_filename = hdrfile[:-4] + '_parameter.hdr'
@@ -103,9 +108,13 @@ def main():
     lines, samples, bands = img.shape
     print(f'{lines} lines, {samples} samples, {bands} bands')
     dt = img.dtype
-    ties = [750, 1489, 2896]
-    glass = [1150, 1170, 1190]
-    depth_wavelengths = [950, 1050, 1249, 1898, 2417]
+    ties = DEFAULT_TIE_POINTS
+    glass = GLASS_BAND_POINTS
+    depth_wavelengths = BAND_DEPTH_POINTS
+    dynamic_tie_ranges = None
+    if args.dynamic_tie_points:
+        dynamic_tie_ranges = TIE_POINT_RANGES
+    center_range = BAND_CENTER_RANGE
     wavelengths = np.array(img.metadata['wavelength'], dtype=dt)
     if DATA_IGNORE_VALUE_NAME in img.metadata:
         ignore_value = dt.type(img.metadata[DATA_IGNORE_VALUE_NAME])
@@ -113,13 +122,15 @@ def main():
     else:
         ignore_value = None
         print(f'{DATA_IGNORE_VALUE_NAME} not set.')
-    md = metadata(img.metadata, hdrfile)
+    md = metadata(img.metadata, hdrfile, depth_wavelengths)
     interleave = img.metadata['interleave']
     out = transform_image(img,
                           wavelengths=wavelengths,
                           ties=ties,
                           glass=glass,
                           depth_wavelengths=depth_wavelengths,
+                          dynamic_tie_ranges=dynamic_tie_ranges,
+                          center_range=center_range,
                           ignore_value=ignore_value)
     envi.save_image(out_filename, out,
                     metadata=md, interleave=interleave)
