@@ -8,20 +8,34 @@ import pandas as pd
 import transformations
 
 
+# Used for initial continuum when computing dynamic tie points
+INITIAL_TIE_POINTS = [700, 1489, 2616]
+
+# Ranges within which to look for the dynamic tie points
+TIE_POINT_RANGES = [(600, 1000), (1000, 1700), (2000, 2600)]
+
+# Static tie points
+DEFAULT_TIE_POINTS = [750, 1489, 2896]
+
+# Range around the band minimum to use for a polynomial fit to compute the
+# band center. This is the one-sided range, so the polynomial will be fit from
+# (minimum - range) to (minimum + range).
+BAND_CENTER_RANGE = 200
+
+GLASS_BAND_POINTS = [1150, 1170, 1190]
+BAND_DEPTH_POINTS = [950, 1050, 1249, 1898, 2417]
+
+
 def nearest_wavelength(x, wavelengths):
     return wavelengths[np.abs(wavelengths - x).argmin()]
 
 
 def main():
-    ties = [750, 1489, 2896]
-    glass = [1150, 1170, 1190]
-    deg = 4
-    smooth = True
-
     parser = argparse.ArgumentParser(description='Analyze a single spectrum')
     parser.add_argument('--printout', action='store_true')
     parser.add_argument('--noplot', action='store_true')
     parser.add_argument('--polynomials', action='store_true')
+    parser.add_argument('--dynamic_tie_points', '-d', action='store_true')
     parser.add_argument('csvfile')
     args = parser.parse_args()
 
@@ -29,6 +43,7 @@ def main():
     plot = not args.noplot
     polynomials = args.polynomials
     printout = args.printout
+    dynamic = args.dynamic_tie_points
 
     band_info_file = csvfile[:-4] + '_parameter.csv'
     continuum_removed_file = csvfile[:-4] + '_continuum-removed.csv'
@@ -41,13 +56,15 @@ def main():
 
     data = pd.read_csv(csvfile, header=0,
                        skiprows=range(1, 4), index_col=1, dtype='f8')
-    ties = [nearest_wavelength(x, data.index) for x in ties]
-    glass = [nearest_wavelength(x, data.index) for x in glass]
+    glass = [nearest_wavelength(x, data.index) for x in GLASS_BAND_POINTS]
     band_info = pd.DataFrame(columns=[
         'name',
-        'reflectance at 750nm',
-        'reflectance at 1489nm',
-        'reflectance at 2896nm',
+        '1st tie point',
+        '2nd tie point',
+        '3rd tie point',
+        'reflectance at 1st tie point',
+        'reflectance at 2nd tie point',
+        'reflectance at 3rd tie point',
         '1um band minimum',
         '1um band center',
         '1um band depth',
@@ -66,8 +83,25 @@ def main():
         if plot:
             plt.figure(colname)
             plt.title(colname)
-        if smooth:
-            spectrum = transformations.smooth(spectrum)
+
+        spectrum = transformations.smooth(spectrum)
+
+        if dynamic:
+            ties = [
+                nearest_wavelength(x, data.index)
+                for x in INITIAL_TIE_POINTS
+            ]
+            initial_cont = transformations.continuum(spectrum, ties)
+            initial_removed = spectrum / initial_cont
+            ties = [
+                initial_removed[start:end].idxmax()
+                for start, end in TIE_POINT_RANGES
+            ]
+        else:
+            ties = [
+                nearest_wavelength(x, data.index)
+                for x in DEFAULT_TIE_POINTS
+            ]
 
         # continuum removal
         continuum = transformations.continuum(spectrum, ties)
@@ -80,7 +114,9 @@ def main():
         left, right = ties[0], ties[1]
         band_1 = removed[left:right]
         minimum_1 = band_1.idxmin()
-        ctr_1 = transformations.center(band_1)
+        poly_band_1 = band_1[minimum_1 - BAND_CENTER_RANGE:
+                             minimum_1 + BAND_CENTER_RANGE]
+        ctr_1 = transformations.center(poly_band_1)
         if ctr_1 is not None:
             x_1, y_1 = ctr_1
             depth_1 = 1 - y_1
@@ -97,7 +133,9 @@ def main():
         left, right = ties[1], ties[2]
         band_2 = removed[left:right]
         minimum_2 = band_2.idxmin()
-        ctr_2 = transformations.center(band_2)
+        poly_band_2 = band_2[minimum_2 - BAND_CENTER_RANGE:
+                             minimum_2 + BAND_CENTER_RANGE]
+        ctr_2 = transformations.center(poly_band_2)
         if ctr_2 is not None:
             x_2, y_2 = ctr_2
             depth_2 = 1 - y_2
@@ -116,9 +154,12 @@ def main():
 
         band_info = band_info.append({
             'name': colname,
-            'reflectance at 750nm': spectrum[ties[0]],
-            'reflectance at 1489nm': spectrum[ties[1]],
-            'reflectance at 2896nm': spectrum[ties[2]],
+            '1st tie point': ties[0],
+            '2nd tie point': ties[1],
+            '3rd tie point': ties[2],
+            'reflectance at 1st tie point': spectrum[ties[0]],
+            'reflectance at 2nd tie point': spectrum[ties[1]],
+            'reflectance at 3rd tie point': spectrum[ties[2]],
             '1um band minimum': minimum_1,
             '1um band center': x_1,
             '1um band depth': depth_1,
@@ -133,11 +174,13 @@ def main():
             'glass band depth': glass_depth,
         }, ignore_index=True)
         if plot and polynomials:
-            poly_1 = transformations.polynomial_approximation(band_1, deg)
-            plt.plot(band_1.index, np.vectorize(poly_1)(band_1.index))
+            poly_1 = transformations.polynomial_approximation(poly_band_1)
+            plt.plot(poly_band_1.index, np.vectorize(
+                poly_1)(poly_band_1.index))
             plt.plot([x_1], [y_1], marker='x', color='grey')
-            poly_2 = transformations.polynomial_approximation(band_2, deg)
-            plt.plot(band_2.index, np.vectorize(poly_2)(band_2.index))
+            poly_2 = transformations.polynomial_approximation(poly_band_2)
+            plt.plot(poly_band_2.index, np.vectorize(
+                poly_2)(poly_band_2.index))
             plt.plot([x_2], [y_2], marker='x', color='grey')
 
     if printout:
