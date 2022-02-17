@@ -5,7 +5,7 @@ import warnings
 warnings.simplefilter('ignore', np.RankWarning)
 
 def continuum(data, ties):
-    cont = pd.Series(index=data.index)
+    cont = pd.Series(index=data.index, dtype='float64')
     # line through left and middle tie points
     slope = (data[ties[1]] - data[ties[0]]) / (ties[1] - ties[0])
     cont[:ties[1]] = data[ties[0]] + slope * (cont[:ties[1]].index - ties[0])

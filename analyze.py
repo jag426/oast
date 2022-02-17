@@ -57,28 +57,8 @@ def main():
     data = pd.read_csv(csvfile, header=0,
                        skiprows=range(1, 4), index_col=1, dtype='f8')
     glass = [nearest_wavelength(x, data.index) for x in GLASS_BAND_POINTS]
-    band_info = pd.DataFrame(columns=[
-        'name',
-        '1st tie point',
-        '2nd tie point',
-        '3rd tie point',
-        'reflectance at 1st tie point',
-        'reflectance at 2nd tie point',
-        'reflectance at 3rd tie point',
-        '1um band minimum',
-        '1um band center',
-        '1um band depth',
-        '1um integrated band depth',
-        '1um band asymmetry',
-        '2um band minimum',
-        '2um band center',
-        '2um band depth',
-        '2um band integrated band depth',
-        '2um band asymmetry',
-        'interband distance',
-        'glass band depth',
-    ])
     continuum_removed = pd.DataFrame(index=data.index)
+    band_info_rows = []
     for i, (colname, spectrum) in enumerate(list(data.items())[1:]):
         if plot:
             plt.figure(colname)
@@ -152,7 +132,7 @@ def main():
         interband_distance = x_2 - x_1
         glass_depth = 1 - removed[glass].mean()
 
-        band_info = band_info.append({
+        band_info_rows.append(pd.DataFrame([{
             'name': colname,
             '1st tie point': ties[0],
             '2nd tie point': ties[1],
@@ -172,7 +152,7 @@ def main():
             '2um band asymmetry': asym_2,
             'interband distance': interband_distance,
             'glass band depth': glass_depth,
-        }, ignore_index=True)
+        }]))
         if plot and polynomials:
             poly_1 = transformations.polynomial_approximation(poly_band_1)
             plt.plot(poly_band_1.index, np.vectorize(
@@ -183,6 +163,7 @@ def main():
                 poly_2)(poly_band_2.index))
             plt.plot([x_2], [y_2], marker='x', color='grey')
 
+    band_info = pd.concat(band_info_rows, ignore_index=True)
     if printout:
         print(band_info.to_csv(sep='\t'))
         print(continuum_removed.to_csv(sep='\t'))
