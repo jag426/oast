@@ -1,2 +1,5 @@
 __pycache__/
-test/
+dist/
+spectra.egg-info/
+test_data/
+venv-dev/

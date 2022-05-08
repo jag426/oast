@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import spectral.io.envi as envi
 
-import transformations
+from . import transformations
 
 
 # Used for initial continuum when computing dynamic tie points
