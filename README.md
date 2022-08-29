@@ -4,6 +4,21 @@ This package provides our awesome spectral toolbox for performing analysis of hy
 
 ## Development
 
+### Setup
+
+In the cloned git repository, create your virtual environment:
+```
+python3 -m venv .venv
+source .venv/bin/activate  # or .venv/bin/activate.fish, or whatever
+```
+and install this package in "editable" mode:
+```
+pip install --editable .
+```
+If you get an error like `ERROR: File "setup.py" not found.`, then upgrade pip (`pip install --upgrade pip`) and retry.
+
+Now, you can run the console scripts and such, with all the necessary dependencies, but the local code is still being run directly, so any changes made are immediately reflected.
+
 ### Building and releasing for PyPI
 
 With `build` installed (`pip install --upgrade build`), you can then run:
