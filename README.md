@@ -34,7 +34,7 @@ twine upload dist/*
 
 This package is distributed for conda through the `conda-forge` channel. When a new version is released on PyPI, that new version should also be released on conda-forge.
 
-It is highly likely that a bot will notice the new PyPI version and create a pull request on https://github.com/conda-forge/oast-feedstock automatically that can be checked and merged. This is the preferred method. If such a pull request doesn't arrive, update the feedstock manually as follows.
+It is highly likely that a bot will notice the new PyPI version and create and auto-merge a pull request on https://github.com/conda-forge/oast-feedstock automatically. If such a pull request doesn't arrive, update the feedstock manually as follows.
 
 Clone your fork of the conda feedstock (https://github.com/conda-forge/oast-feedstock) and update the `recipe/meta.yaml` file to reflect the new PyPI release. If you have `grayskull` installed (`pipx install grayskull`), you can generate a recipe that has the new PyPI release information with
 ```
